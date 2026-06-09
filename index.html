@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Калькулятор корректировки плотности</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">ВЭЛ Инжиниринг</p>
+        <h1>Калькулятор корректировки плотности</h1>
+      </div>
+      <div class="header-summary" id="headerSummary"></div>
+    </header>
+
+    <main class="app-shell">
+      <section class="workspace">
+        <div class="section-head">
+          <div>
+            <h2>Емкости</h2>
+            <p>Введите фактический объем, плотность и запас по вместимости.</p>
+          </div>
+          <div class="actions">
+            <button class="icon-button" id="addTankBtn" type="button" title="Добавить емкость">+</button>
+            <button class="secondary-button" id="loadExampleBtn" type="button">Пример</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" aria-label="Емкости">
+            <thead>
+              <tr>
+                <th>Емкость</th>
+                <th>Объем, м3</th>
+                <th>Плотность, г/см3</th>
+                <th>Темп., C</th>
+                <th>Макс., м3</th>
+                <th>Свободно</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tankRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="settings-panel">
+        <h2>Параметры</h2>
+        <label>
+          Плотность воды, г/см3
+          <input id="waterDensity" type="number" min="0.95" max="1.1" step="0.001" value="1.000" />
+        </label>
+        <label>
+          Эффективная плотность реагента, г/см3
+          <input id="reagentDensity" type="number" min="1.1" max="4" step="0.01" value="2.60" />
+        </label>
+        <label>
+          Доступно реагента, кг
+          <input id="reagentLimit" type="number" min="0" step="100" value="12000" />
+        </label>
+        <label>
+          Фасовка мешка, кг
+          <input id="bagSize" type="number" min="1" step="1" value="1000" />
+        </label>
+        <label>
+          Подача воды, л/с
+          <input id="waterRate" type="number" min="0.1" step="0.1" value="8" />
+        </label>
+        <label>
+          Приведение к температуре, C
+          <input id="referenceTemp" type="number" step="1" value="20" />
+        </label>
+        <label>
+          Коэффициент поправки, г/см3 на C
+          <input id="tempCoeff" type="number" step="0.0001" value="0.0006" />
+        </label>
+      </aside>
+
+      <section class="scenario-panel">
+        <div class="section-head">
+          <div>
+            <h2>Сценарий</h2>
+            <p>Сравните корректировку каждой емкости или соберите расчетную партию.</p>
+          </div>
+          <div class="segmented" role="tablist" aria-label="Тип сценария">
+            <button class="active" id="modeTanksBtn" type="button">По емкостям</button>
+            <button id="modeBatchBtn" type="button">Партия</button>
+          </div>
+        </div>
+
+        <div class="scenario-controls">
+          <label>
+            Целевая плотность, г/см3
+            <input id="targetDensity" type="number" min="1" max="3" step="0.001" value="1.740" />
+          </label>
+          <label id="batchVolumeLabel" class="hidden">
+            Целевой объем партии, м3
+            <input id="targetVolume" type="number" min="0" step="0.1" value="80" />
+          </label>
+          <button class="primary-button" id="calculateBtn" type="button">Рассчитать</button>
+        </div>
+
+        <div id="batchAllocator" class="allocator hidden">
+          <div class="allocator-head">
+            <h3>Отбор из емкостей</h3>
+            <button class="secondary-button" id="autoAllocateBtn" type="button">Подобрать автоматически</button>
+          </div>
+          <div id="allocationRows" class="allocation-grid"></div>
+        </div>
+      </section>
+
+      <section class="results-panel">
+        <div class="section-head">
+          <div>
+            <h2>Результат</h2>
+            <p id="resultSubtitle">Расчет появится после ввода данных.</p>
+          </div>
+          <button class="secondary-button" id="printBtn" type="button">Печать</button>
+        </div>
+        <div id="warnings" class="warnings"></div>
+        <div id="results" class="results"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
