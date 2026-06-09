@@ -144,8 +144,25 @@ function updateTank(id, key, value) {
   const tank = state.tanks.find((item) => item.id === id);
   if (!tank) return;
   tank[key] = key === "name" ? value : num(value, 0);
+  if (key === "volume" || key === "capacity") updateFreeVolumeCell(tank);
   renderHeader();
   renderAllocator();
+}
+
+function freeVolumeState(tank) {
+  const rawFree = tank.capacity - tank.volume;
+  return {
+    value: Math.max(rawFree, 0),
+    overflow: rawFree < 0,
+  };
+}
+
+function updateFreeVolumeCell(tank) {
+  const cell = document.querySelector(`[data-free="${tank.id}"]`);
+  if (!cell) return;
+  const free = freeVolumeState(tank);
+  cell.textContent = `${fmt(free.value, 2)} м3`;
+  cell.classList.toggle("is-overflow", free.overflow);
 }
 
 function removeTank(id) {
@@ -207,7 +224,7 @@ function renderHeader() {
 function renderTanks() {
   els.tankRows.innerHTML = state.tanks
     .map((tank) => {
-      const free = Math.max(tank.capacity - tank.volume, 0);
+      const free = freeVolumeState(tank);
       return `
         <tr>
           <td><input value="${tank.name}" data-id="${tank.id}" data-key="name" aria-label="Название емкости" /></td>
@@ -215,7 +232,7 @@ function renderTanks() {
           <td><input type="number" min="0" step="0.001" value="${tank.density}" data-id="${tank.id}" data-key="density" aria-label="Плотность" /></td>
           <td><input type="number" step="1" value="${tank.temperature}" data-id="${tank.id}" data-key="temperature" aria-label="Температура" /></td>
           <td><input type="number" min="0" step="0.1" value="${tank.capacity}" data-id="${tank.id}" data-key="capacity" aria-label="Максимальный объем" /></td>
-          <td class="free-volume">${fmt(free, 2)} м3</td>
+          <td class="free-volume ${free.overflow ? "is-overflow" : ""}" data-free="${tank.id}">${fmt(free.value, 2)} м3</td>
           <td><button class="remove-button" type="button" data-remove="${tank.id}" title="Удалить емкость">×</button></td>
         </tr>
       `;
