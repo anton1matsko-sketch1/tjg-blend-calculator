@@ -114,7 +114,8 @@ p {
 .settings-panel,
 .scenario-panel,
 .results-panel,
-.recommendations-panel {
+.recommendations-panel,
+.dilution-plan-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -124,7 +125,8 @@ p {
 .workspace,
 .scenario-panel,
 .results-panel,
-.recommendations-panel {
+.recommendations-panel,
+.dilution-plan-panel {
   padding: 18px;
 }
 
@@ -137,7 +139,8 @@ p {
 
 .scenario-panel,
 .results-panel,
-.recommendations-panel {
+.recommendations-panel,
+.dilution-plan-panel {
   grid-column: 1 / -1;
 }
 
@@ -335,6 +338,45 @@ button {
 .allocation-card span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.dilution-controls {
+  grid-template-columns: minmax(180px, 240px);
+  margin-bottom: 12px;
+}
+
+.dilution-alert {
+  margin: 0 0 12px;
+  border-left: 4px solid var(--danger);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff1f1;
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.dilution-table {
+  min-width: 860px;
+}
+
+.dilution-table td:last-child {
+  font-weight: 800;
+}
+
+.dilution-row-near {
+  background: #fff8df;
+}
+
+.dilution-row-target {
+  background: #ecf8f0;
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.empty-row {
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
 }
 
 .warnings {

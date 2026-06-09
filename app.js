@@ -13,6 +13,8 @@ const els = {
   printBtn: document.querySelector("#printBtn"),
   exportReportBtn: document.querySelector("#exportReportBtn"),
   engineerRecommendations: document.querySelector("#engineerRecommendations"),
+  waterStepVolume: document.querySelector("#waterStepVolume"),
+  dilutionPlanRows: document.querySelector("#dilutionPlanRows"),
   modeTanksBtn: document.querySelector("#modeTanksBtn"),
   modeBatchBtn: document.querySelector("#modeBatchBtn"),
   batchVolumeLabel: document.querySelector("#batchVolumeLabel"),
@@ -74,6 +76,7 @@ function readParams() {
     tempCoeff: num(els.tempCoeff.value, 0),
     targetDensity: num(els.targetDensity.value, 1.74),
     targetVolume: num(els.targetVolume.value, 0),
+    waterStepVolume: num(els.waterStepVolume.value, 0.5),
   };
 }
 
@@ -272,6 +275,7 @@ function render() {
   renderHeader();
   renderTanks();
   renderAllocator();
+  renderDilutionPlan();
 }
 
 function showWarnings(items) {
@@ -420,6 +424,7 @@ function calculateBatch() {
 
 function calculate() {
   renderHeader();
+  renderDilutionPlan();
   if (state.tanks.length === 0) {
     els.resultSubtitle.textContent = "Добавьте емкости или загрузите пример.";
     showWarnings([]);
@@ -457,6 +462,123 @@ function getReportVolumes(params) {
     totalVolume,
     effectiveVolume: state.mode === "batch" ? selectedVolume : totalVolume,
   };
+}
+
+function getDilutionBase(params) {
+  const selected = state.tanks
+    .map((tank) => ({
+      tank,
+      take: Math.min(num(state.allocations[tank.id], 0), tank.volume),
+    }))
+    .filter((item) => item.take > 0);
+  const source = state.mode === "batch" && selected.length > 0
+    ? selected
+    : state.tanks.map((tank) => ({ tank, take: tank.volume }));
+  const volume = source.reduce((sum, item) => sum + item.take, 0);
+  const mass = source.reduce((sum, item) => sum + item.take * densityAtReference(item.tank, params), 0);
+
+  return {
+    volume,
+    mass,
+    density: volume > 0 ? mass / volume : 0,
+  };
+}
+
+function buildDilutionPlanRows(params) {
+  const base = getDilutionBase(params);
+  const rows = [];
+  const target = params.targetDensity;
+  const waterDensity = params.waterDensity;
+  const step = params.waterStepVolume;
+
+  if (base.volume <= 0 || step <= 0 || target <= waterDensity || base.density <= target) {
+    return { base, rows };
+  }
+
+  let cumulativeWater = 0;
+  let currentVolume = base.volume;
+  let currentMass = base.mass;
+  const maxSteps = 500;
+
+  for (let index = 1; index <= maxSteps; index += 1) {
+    const currentDensity = currentMass / currentVolume;
+    const exactWaterToTarget = currentVolume * (currentDensity - target) / (target - waterDensity);
+    const stepWater = Math.min(step, exactWaterToTarget);
+    cumulativeWater += stepWater;
+    currentMass += stepWater * waterDensity;
+    currentVolume += stepWater;
+
+    const densityAfterStep = currentMass / currentVolume;
+    const remainingWater = densityAfterStep > target
+      ? currentVolume * (densityAfterStep - target) / (target - waterDensity)
+      : 0;
+    const reachedTarget = densityAfterStep <= target + 0.0005;
+    const nextStepIsLast = !reachedTarget && remainingWater <= step + 0.000001;
+
+    rows.push({
+      stepNumber: index,
+      stepWater,
+      cumulativeWater,
+      density: Math.max(densityAfterStep, target),
+      status: reachedTarget
+        ? "🔴 Стоп — целевая плотность достигнута"
+        : nextStepIsLast
+          ? "🟡 Следующий шаг — последний, контролировать дробно"
+          : "🟢 Норма",
+      tone: reachedTarget ? "target" : nextStepIsLast ? "near" : "normal",
+    });
+
+    if (reachedTarget) break;
+  }
+
+  return { base, rows };
+}
+
+function renderDilutionPlan() {
+  const params = readParams();
+  const { base, rows } = buildDilutionPlanRows(params);
+
+  if (base.volume <= 0) {
+    els.dilutionPlanRows.innerHTML = `
+      <tr><td colspan="5" class="empty-row">Добавьте объем раствора для построения плана.</td></tr>
+    `;
+    return;
+  }
+
+  if (params.waterStepVolume <= 0) {
+    els.dilutionPlanRows.innerHTML = `
+      <tr><td colspan="5" class="empty-row">Укажите положительный шаг добавления воды.</td></tr>
+    `;
+    return;
+  }
+
+  if (params.targetDensity <= params.waterDensity) {
+    els.dilutionPlanRows.innerHTML = `
+      <tr><td colspan="5" class="empty-row">Целевая плотность должна быть выше плотности воды.</td></tr>
+    `;
+    return;
+  }
+
+  if (base.density <= params.targetDensity) {
+    els.dilutionPlanRows.innerHTML = `
+      <tr><td colspan="5" class="empty-row">Текущая плотность ${fmt(base.density, 3)} г/см3 не выше целевой. Разбавление водой не требуется.</td></tr>
+    `;
+    return;
+  }
+
+  els.dilutionPlanRows.innerHTML = rows
+    .map(
+      (row) => `
+        <tr class="dilution-row-${row.tone}">
+          <td>${row.stepNumber}</td>
+          <td>${fmt(row.stepWater, 2)}</td>
+          <td>${fmt(row.cumulativeWater, 2)}</td>
+          <td>${fmt(row.density, 3)}</td>
+          <td>${row.status}</td>
+        </tr>
+      `,
+    )
+    .join("");
 }
 
 function makeLogoMarkup() {
@@ -690,14 +812,21 @@ document.addEventListener("input", (event) => {
   const target = event.target;
   if (target.matches("[data-id][data-key]")) {
     updateTank(target.dataset.id, target.dataset.key, target.value);
+    renderDilutionPlan();
   }
 
   if (target.matches("[data-allocation]")) {
     state.allocations[target.dataset.allocation] = num(target.value, 0);
+    renderDilutionPlan();
   }
 
   if (target.closest(".settings-panel") || target.closest(".scenario-controls")) {
     renderHeader();
+    renderDilutionPlan();
+  }
+
+  if (target.closest(".dilution-plan-panel")) {
+    renderDilutionPlan();
   }
 });
 
