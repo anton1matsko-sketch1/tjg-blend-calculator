@@ -491,17 +491,13 @@ button {
 .report-logo {
   display: grid;
   justify-items: center;
-  gap: 1.5mm;
-  min-width: 24mm;
-  color: #082638;
-  font-size: 7pt;
-  font-weight: 800;
+  min-width: 22mm;
 }
 
-.report-logo svg {
-  width: 19mm;
-  height: 20mm;
-  fill: #082638;
+.report-logo img {
+  display: block;
+  width: 18mm;
+  height: auto;
 }
 
 .report-hero {

@@ -462,11 +462,7 @@ function getReportVolumes(params) {
 function makeLogoMarkup() {
   return `
     <div class="report-logo">
-      <svg viewBox="0 0 80 82" aria-hidden="true">
-        <path d="M27 4C20 20 11 34 11 50c0 15 10 25 25 27-8-8-11-17-8-28 3-12 10-25 16-39C38 9 33 6 27 4Z"></path>
-        <path d="M53 4C60 20 69 34 69 50c0 15-10 25-25 27 8-8 11-17 8-28-3-12-10-25-16-39 6-1 11-4 17-6Z"></path>
-      </svg>
-      <span>WELL PRO</span>
+      <img src="assets/wellpro-logo.png" alt="WELLPRO" />
     </div>
   `;
 }
@@ -609,25 +605,30 @@ function fallbackPrintReport(report) {
   printWindow.print();
 }
 
-function loadPdfLibrary() {
-  if (window.html2pdf) return Promise.resolve(window.html2pdf);
-
+function loadScriptOnce(src, id) {
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-pdf-library="html2pdf"]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(window.html2pdf));
-      existing.addEventListener("error", reject);
+    if (document.querySelector(`script[data-loader-id="${id}"]`)) {
+      resolve();
       return;
     }
 
     const script = document.createElement("script");
-    script.src = "assets/html2pdf.bundle.min.js";
-    script.defer = true;
-    script.dataset.pdfLibrary = "html2pdf";
-    script.addEventListener("load", () => resolve(window.html2pdf));
+    script.src = src;
+    script.dataset.loaderId = id;
+    script.addEventListener("load", resolve);
     script.addEventListener("error", reject);
     document.head.appendChild(script);
   });
+}
+
+async function loadPdfLibraries() {
+  if (!window.html2canvas) {
+    await loadScriptOnce("assets/html2canvas.min.js", "html2canvas");
+  }
+  if (!window.jspdf?.jsPDF) {
+    await loadScriptOnce("assets/jspdf.umd.min.js", "jspdf");
+  }
+  return Boolean(window.html2canvas && window.jspdf?.jsPDF);
 }
 
 async function exportReportPdf() {
@@ -639,23 +640,38 @@ async function exportReportPdf() {
   document.body.appendChild(wrapper);
 
   try {
-    const pdfLibrary = await loadPdfLibrary();
-    if (!pdfLibrary) {
+    const librariesReady = await loadPdfLibraries();
+    if (!librariesReady) {
       fallbackPrintReport(report);
       return;
     }
 
-    await pdfLibrary()
-      .set({
-        margin: 0,
-        filename: report.fileName,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css"] },
-      })
-      .from(wrapper.querySelector(".report-export"))
-      .save();
+    if (document.fonts?.ready) await document.fonts.ready;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      unit: "mm",
+      format: "a4",
+      orientation: "portrait",
+      compress: true,
+    });
+    const pages = [...wrapper.querySelectorAll(".report-page")];
+
+    for (const [index, page] of pages.entries()) {
+      const canvas = await window.html2canvas(page, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+        windowWidth: page.scrollWidth,
+        windowHeight: page.scrollHeight,
+      });
+      const image = canvas.toDataURL("image/jpeg", 0.98);
+      if (index > 0) pdf.addPage("a4", "portrait");
+      pdf.addImage(image, "JPEG", 0, 0, 210, 297, undefined, "FAST");
+    }
+
+    pdf.save(report.fileName);
   } finally {
     wrapper.remove();
   }
