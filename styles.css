@@ -27,7 +27,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -112,7 +113,8 @@ p {
 .workspace,
 .settings-panel,
 .scenario-panel,
-.results-panel {
+.results-panel,
+.recommendations-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -121,7 +123,8 @@ p {
 
 .workspace,
 .scenario-panel,
-.results-panel {
+.results-panel,
+.recommendations-panel {
   padding: 18px;
 }
 
@@ -133,7 +136,8 @@ p {
 }
 
 .scenario-panel,
-.results-panel {
+.results-panel,
+.recommendations-panel {
   grid-column: 1 / -1;
 }
 
@@ -172,7 +176,20 @@ input {
   background: #fff;
 }
 
-input:focus {
+textarea {
+  width: 100%;
+  min-height: 116px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  line-height: 1.45;
+}
+
+input:focus,
+textarea:focus {
   border-color: var(--accent);
   outline: 3px solid rgba(11, 111, 99, 0.16);
 }
@@ -406,6 +423,222 @@ button {
   display: none !important;
 }
 
+.report-export-host {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  z-index: -1;
+  width: 210mm;
+  background: #fff;
+}
+
+.report-print-body {
+  margin: 0;
+  background: #fff;
+}
+
+.report-export {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 22mm 14mm 18mm;
+  background: #fff;
+  color: #14313d;
+  font-family:
+    Arial, "Helvetica Neue", Helvetica, ui-sans-serif, system-ui, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.35;
+}
+
+.report-export * {
+  box-shadow: none !important;
+}
+
+.report-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20mm;
+  min-height: 28mm;
+}
+
+.report-company {
+  margin: 0 0 3mm;
+  color: #14313d;
+  font-size: 13pt;
+  font-weight: 800;
+}
+
+.report-date {
+  margin: 0;
+  color: #415764;
+  font-size: 9pt;
+}
+
+.report-logo {
+  display: grid;
+  justify-items: center;
+  gap: 1.5mm;
+  min-width: 24mm;
+  color: #082638;
+  font-size: 7pt;
+  font-weight: 800;
+}
+
+.report-logo svg {
+  width: 19mm;
+  height: 20mm;
+  fill: #082638;
+}
+
+.report-hero {
+  margin-top: 18mm;
+}
+
+.report-hero h1 {
+  width: 140mm;
+  margin: 0 0 10mm;
+  color: #14313d;
+  font-size: 17pt;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.report-rule {
+  height: 1.2mm;
+  border-top: 0.55mm solid #14313d;
+  border-bottom: 0.25mm solid #14313d;
+}
+
+.report-section {
+  margin-top: 10mm;
+  break-inside: avoid;
+}
+
+.report-section h2 {
+  margin: 0 0 5mm;
+  color: #14313d;
+  font-size: 13pt;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.report-section table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #14313d;
+  font-size: 8.5pt;
+}
+
+.report-section th {
+  border-top: 0.4mm solid #14313d;
+  border-bottom: 0.25mm solid #14313d;
+  padding: 2.4mm 2mm;
+  background: #f3f7f7;
+  color: #14313d;
+  font-weight: 800;
+  text-align: left;
+}
+
+.report-section td {
+  border-bottom: 0.2mm solid #d3dcde;
+  padding: 2.3mm 2mm;
+  vertical-align: top;
+}
+
+.report-danger {
+  color: #a32626;
+  font-weight: 800;
+}
+
+.report-params {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-top: 0.4mm solid #14313d;
+  border-left: 0.2mm solid #d3dcde;
+}
+
+.report-params div {
+  min-height: 17mm;
+  border-right: 0.2mm solid #d3dcde;
+  border-bottom: 0.2mm solid #d3dcde;
+  padding: 3mm;
+}
+
+.report-params span {
+  display: block;
+  margin-bottom: 1.5mm;
+  color: #58707b;
+  font-size: 8.5pt;
+  font-weight: 700;
+}
+
+.report-params strong {
+  display: block;
+  color: #14313d;
+  font-size: 11pt;
+}
+
+.report-recommendations {
+  min-height: 34mm;
+  border-top: 0.4mm solid #14313d;
+  border-bottom: 0.2mm solid #d3dcde;
+  padding: 4mm 0;
+  color: #14313d;
+  font-size: 10pt;
+}
+
+.report-signature {
+  margin-top: 13mm;
+  break-inside: avoid;
+}
+
+.report-signature p {
+  margin: 0 0 9mm;
+  color: #14313d;
+  font-size: 10.5pt;
+  font-weight: 700;
+}
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: 42mm 68mm 35mm;
+  gap: 10mm;
+}
+
+.signature-grid span {
+  display: block;
+  min-height: 8mm;
+  border-bottom: 0.25mm solid #14313d;
+  color: #14313d;
+  text-align: center;
+}
+
+.signature-grid label {
+  display: block;
+  margin-top: 1.5mm;
+  color: #58707b;
+  font-size: 8pt;
+  font-weight: 700;
+  text-align: center;
+}
+
+.report-export footer {
+  position: absolute;
+  left: 14mm;
+  right: 14mm;
+  bottom: 8mm;
+}
+
+.report-export footer p {
+  margin: 4mm 2mm 0;
+  color: #14313d;
+  font-size: 8.5pt;
+  line-height: 1.25;
+}
+
 @media (max-width: 900px) {
   .app-header {
     align-items: stretch;
@@ -480,5 +713,9 @@ button {
   .results-panel {
     box-shadow: none;
     margin-bottom: 16px;
+  }
+
+  .report-print-body .report-export {
+    margin: 0;
   }
 }

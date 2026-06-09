@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Калькулятор корректировки плотности</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="assets/html2pdf.bundle.min.js"></script>
   </head>
   <body>
     <header class="app-header">
@@ -117,10 +118,27 @@
             <h2>Результат</h2>
             <p id="resultSubtitle">Расчет появится после ввода данных.</p>
           </div>
-          <button class="secondary-button" id="printBtn" type="button">Печать</button>
+          <div class="actions">
+            <button class="secondary-button" id="printBtn" type="button">Печать</button>
+            <button class="primary-button" id="exportReportBtn" type="button">Выгрузить отчёт</button>
+          </div>
         </div>
         <div id="warnings" class="warnings"></div>
         <div id="results" class="results"></div>
+      </section>
+
+      <section class="recommendations-panel">
+        <div class="section-head">
+          <div>
+            <h2>Рекомендации инженера-технолога</h2>
+            <p>Этот текст попадет в PDF-отчет. Поле можно оставить пустым.</p>
+          </div>
+        </div>
+        <textarea
+          id="engineerRecommendations"
+          rows="5"
+          placeholder="Введите рекомендации перед выгрузкой отчета"
+        ></textarea>
       </section>
     </main>
 

@@ -11,6 +11,8 @@ const els = {
   loadExampleBtn: document.querySelector("#loadExampleBtn"),
   calculateBtn: document.querySelector("#calculateBtn"),
   printBtn: document.querySelector("#printBtn"),
+  exportReportBtn: document.querySelector("#exportReportBtn"),
+  engineerRecommendations: document.querySelector("#engineerRecommendations"),
   modeTanksBtn: document.querySelector("#modeTanksBtn"),
   modeBatchBtn: document.querySelector("#modeBatchBtn"),
   batchVolumeLabel: document.querySelector("#batchVolumeLabel"),
@@ -50,6 +52,15 @@ function fmt(value, digits = 2) {
 function num(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function readParams() {
@@ -423,10 +434,220 @@ function calculate() {
   }
 }
 
+function getTankReportRows(params) {
+  return state.tanks.map((tank) => {
+    const free = freeVolumeState(tank);
+    return {
+      name: tank.name,
+      volume: tank.volume,
+      density: densityAtReference(tank, params),
+      sourceDensity: tank.density,
+      temperature: tank.temperature,
+      capacity: tank.capacity,
+      free: free.value,
+      overflow: free.overflow,
+    };
+  });
+}
+
+function getReportVolumes(params) {
+  const totalVolume = state.tanks.reduce((sum, tank) => sum + tank.volume, 0);
+  const selectedVolume = Object.values(state.allocations).reduce((sum, value) => sum + num(value, 0), 0);
+  return {
+    totalVolume,
+    effectiveVolume: state.mode === "batch" ? selectedVolume : totalVolume,
+  };
+}
+
+function makeLogoMarkup() {
+  return `
+    <div class="report-logo">
+      <svg viewBox="0 0 80 82" aria-hidden="true">
+        <path d="M27 4C20 20 11 34 11 50c0 15 10 25 25 27-8-8-11-17-8-28 3-12 10-25 16-39C38 9 33 6 27 4Z"></path>
+        <path d="M53 4C60 20 69 34 69 50c0 15-10 25-25 27 8-8 11-17 8-28-3-12-10-25-16-39 6-1 11-4 17-6Z"></path>
+      </svg>
+      <span>WELL PRO</span>
+    </div>
+  `;
+}
+
+function buildReportHtml() {
+  const params = readParams();
+  const rows = getTankReportRows(params);
+  const volumes = getReportVolumes(params);
+  const now = new Date();
+  const date = now.toLocaleDateString("ru-RU");
+  const fileDate = now.toISOString().slice(0, 10);
+  const recommendations = els.engineerRecommendations.value.trim();
+
+  return {
+    fileName: `rekomendatsii-tjg-${fileDate}.pdf`,
+    html: `
+      <article class="report-export">
+        <header class="report-top">
+          <div>
+            <p class="report-company">ООО Вэл Инжиниринг</p>
+            <p class="report-date">Дата формирования: ${date}</p>
+          </div>
+          ${makeLogoMarkup()}
+        </header>
+
+        <section class="report-hero">
+          <h1>Рекомендации по корректировке плотности ТЖГ</h1>
+          <div class="report-rule"></div>
+        </section>
+
+        <section class="report-section">
+          <h2>Исходные данные</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Емкость</th>
+                <th>Объем, м3</th>
+                <th>Плотность, г/см3</th>
+                <th>Темп., °C</th>
+                <th>Макс. объем, м3</th>
+                <th>Свободно, м3</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (row) => `
+                    <tr>
+                      <td>${escapeHtml(row.name)}</td>
+                      <td>${fmt(row.volume, 2)}</td>
+                      <td>${fmt(row.sourceDensity, 3)}</td>
+                      <td>${fmt(row.temperature, 0)}</td>
+                      <td>${fmt(row.capacity, 2)}</td>
+                      <td class="${row.overflow ? "report-danger" : ""}">${fmt(row.free, 2)}</td>
+                    </tr>
+                  `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="report-section">
+          <h2>Расчетные параметры</h2>
+          <div class="report-params">
+            <div><span>Целевая плотность</span><strong>${fmt(params.targetDensity, 3)} г/см3</strong></div>
+            <div><span>Эффективный объем</span><strong>${fmt(volumes.effectiveVolume, 2)} м3</strong></div>
+            <div><span>Доступный объем</span><strong>${fmt(volumes.totalVolume, 2)} м3</strong></div>
+            <div><span>Эффективная плотность реагента</span><strong>${fmt(params.reagentDensity, 2)} г/см3</strong></div>
+            <div><span>Доступно реагента</span><strong>${fmt(params.reagentLimit, 0)} кг</strong></div>
+            <div><span>Фасовка</span><strong>${fmt(params.bagSize, 0)} кг</strong></div>
+            <div><span>Подача насоса</span><strong>${fmt(params.waterRate, 1)} л/с</strong></div>
+            <div><span>Приведение к температуре</span><strong>${fmt(params.referenceTemp, 0)} °C</strong></div>
+          </div>
+        </section>
+
+        <section class="report-section">
+          <h2>Рекомендации инженера-технолога</h2>
+          <div class="report-recommendations">
+            ${recommendations ? escapeHtml(recommendations).replaceAll("\\n", "<br />") : "&nbsp;"}
+          </div>
+        </section>
+
+        <section class="report-signature">
+          <p>Инженер-технолог ООО «Вэл Инжиниринг»</p>
+          <div class="signature-grid">
+            <div><span></span><label>подпись</label></div>
+            <div><span></span><label>ФИО</label></div>
+            <div><span>${date}</span><label>дата</label></div>
+          </div>
+        </section>
+
+        <footer>
+          <div class="report-rule"></div>
+          <p>
+            Внимание! Информация в отчете сформирована на основе введенных исходных данных и инженерных расчетов.
+            Ответственность за проверку исходных данных, условий применения и финальных технологических решений
+            несет пользователь отчета.
+          </p>
+        </footer>
+      </article>
+    `,
+  };
+}
+
+function fallbackPrintReport(report) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="ru">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Отчет</title>
+        <link rel="stylesheet" href="styles.css" />
+      </head>
+      <body class="report-print-body">${report.html}</body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+}
+
+function loadPdfLibrary() {
+  if (window.html2pdf) return Promise.resolve(window.html2pdf);
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-pdf-library="html2pdf"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.html2pdf));
+      existing.addEventListener("error", reject);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "assets/html2pdf.bundle.min.js";
+    script.defer = true;
+    script.dataset.pdfLibrary = "html2pdf";
+    script.addEventListener("load", () => resolve(window.html2pdf));
+    script.addEventListener("error", reject);
+    document.head.appendChild(script);
+  });
+}
+
+async function exportReportPdf() {
+  calculate();
+  const report = buildReportHtml();
+  const wrapper = document.createElement("div");
+  wrapper.className = "report-export-host";
+  wrapper.innerHTML = report.html;
+  document.body.appendChild(wrapper);
+
+  try {
+    const pdfLibrary = await loadPdfLibrary();
+    if (!pdfLibrary) {
+      fallbackPrintReport(report);
+      return;
+    }
+
+    await pdfLibrary()
+      .set({
+        margin: 0,
+        filename: report.fileName,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      })
+      .from(wrapper.querySelector(".report-export"))
+      .save();
+  } finally {
+    wrapper.remove();
+  }
+}
+
 els.addTankBtn.addEventListener("click", () => addTank({ capacity: 50 }));
 els.loadExampleBtn.addEventListener("click", loadExample);
 els.calculateBtn.addEventListener("click", calculate);
 els.printBtn.addEventListener("click", () => window.print());
+els.exportReportBtn.addEventListener("click", exportReportPdf);
 els.modeTanksBtn.addEventListener("click", () => setMode("tanks"));
 els.modeBatchBtn.addEventListener("click", () => setMode("batch"));
 els.autoAllocateBtn.addEventListener("click", autoAllocate);
