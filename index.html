@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Калькулятор корректировки плотности</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="assets/html2canvas.min.js"></script>
-    <script src="assets/jspdf.umd.min.js"></script>
   </head>
   <body>
     <header class="app-header">
@@ -55,18 +53,6 @@
           <input id="waterDensity" type="number" min="0.95" max="1.1" step="0.001" value="1.000" />
         </label>
         <label>
-          Эффективная плотность реагента, г/см3
-          <input id="reagentDensity" type="number" min="1.1" max="4" step="0.01" value="2.60" />
-        </label>
-        <label>
-          Доступно реагента, кг
-          <input id="reagentLimit" type="number" min="0" step="100" value="12000" />
-        </label>
-        <label>
-          Фасовка мешка, кг
-          <input id="bagSize" type="number" min="1" step="1" value="1000" />
-        </label>
-        <label>
           Подача воды, л/с
           <input id="waterRate" type="number" min="0.1" step="0.1" value="8" />
         </label>
@@ -76,9 +62,62 @@
         </label>
         <label>
           Коэффициент поправки, г/см3 на C
-          <input id="tempCoeff" type="number" step="0.0001" value="0.0006" />
+          <input id="tempCoeff" type="number" step="0.00001" value="0.00045" />
         </label>
+        <label class="checkbox-label">
+          <input id="useWeighting" type="checkbox" />
+          Используется утяжеление сухим реагентом
+        </label>
+        <div id="weightingFields" class="conditional-fields hidden">
+          <label>
+            Эффективная плотность реагента, г/см3
+            <input id="reagentDensity" type="number" min="1.1" max="4" step="0.01" value="2.60" />
+          </label>
+          <label>
+            Доступно реагента, кг
+            <input id="reagentLimit" type="number" min="0" step="100" value="12000" />
+          </label>
+          <label>
+            Фасовка мешка, кг
+            <input id="bagSize" type="number" min="1" step="1" value="1000" />
+          </label>
+        </div>
       </aside>
+
+      <section class="report-meta-panel">
+        <div class="section-head">
+          <div>
+            <h2>Исходные данные отчета</h2>
+            <p>Эти поля попадут в DOCX-рекомендации по форме Вэл Инжиниринг.</p>
+          </div>
+        </div>
+        <div class="meta-grid">
+          <label>
+            Состав / продукт
+            <input id="reportProduct" value="SWK-1.8" />
+          </label>
+          <label>
+            Скважина / объект
+            <input id="reportWell" value="скв. 4А051 / Ачим-Д" />
+          </label>
+          <label>
+            Заказчик
+            <input id="reportCustomer" value="ООО «ФракДжет-Волга»" />
+          </label>
+          <label>
+            Дата отчета
+            <input id="reportDate" type="date" />
+          </label>
+          <label>
+            ФИО инженера-технолога
+            <input id="engineerName" value="Мацко А.В." />
+          </label>
+          <label>
+            Резерв на контроль, м3
+            <input id="controlReserve" type="number" min="0" step="0.05" value="0.30" />
+          </label>
+        </div>
+      </section>
 
       <section class="scenario-panel">
         <div class="section-head">
@@ -156,7 +195,7 @@
           </div>
           <div class="actions">
             <button class="secondary-button" id="printBtn" type="button">Печать</button>
-            <button class="primary-button" id="exportReportBtn" type="button">Выгрузить отчёт</button>
+            <button class="primary-button" id="exportReportBtn" type="button">Выгрузить DOCX</button>
           </div>
         </div>
         <div id="warnings" class="warnings"></div>
@@ -167,13 +206,13 @@
         <div class="section-head">
           <div>
             <h2>Рекомендации инженера-технолога</h2>
-            <p>Этот текст попадет в PDF-отчет. Поле можно оставить пустым.</p>
+            <p>Раздел автоматически обновляется по расчету, но его можно отредактировать перед выгрузкой DOCX.</p>
           </div>
         </div>
         <textarea
           id="engineerRecommendations"
           rows="5"
-          placeholder="Введите рекомендации перед выгрузкой отчета"
+          placeholder="Порядок работ и точки контроля"
         ></textarea>
       </section>
     </main>

@@ -2,6 +2,7 @@ const state = {
   mode: "tanks",
   tanks: [],
   allocations: {},
+  workPlanTouched: false,
 };
 
 const els = {
@@ -13,6 +14,14 @@ const els = {
   printBtn: document.querySelector("#printBtn"),
   exportReportBtn: document.querySelector("#exportReportBtn"),
   engineerRecommendations: document.querySelector("#engineerRecommendations"),
+  reportProduct: document.querySelector("#reportProduct"),
+  reportWell: document.querySelector("#reportWell"),
+  reportCustomer: document.querySelector("#reportCustomer"),
+  reportDate: document.querySelector("#reportDate"),
+  engineerName: document.querySelector("#engineerName"),
+  controlReserve: document.querySelector("#controlReserve"),
+  useWeighting: document.querySelector("#useWeighting"),
+  weightingFields: document.querySelector("#weightingFields"),
   waterStepVolume: document.querySelector("#waterStepVolume"),
   dilutionPlanRows: document.querySelector("#dilutionPlanRows"),
   modeTanksBtn: document.querySelector("#modeTanksBtn"),
@@ -77,6 +86,13 @@ function readParams() {
     targetDensity: num(els.targetDensity.value, 1.74),
     targetVolume: num(els.targetVolume.value, 0),
     waterStepVolume: num(els.waterStepVolume.value, 0.5),
+    controlReserve: num(els.controlReserve.value, 0.3),
+    useWeighting: Boolean(els.useWeighting.checked),
+    reportProduct: els.reportProduct.value.trim() || "SWK-1.8",
+    reportWell: els.reportWell.value.trim() || "объект",
+    reportCustomer: els.reportCustomer.value.trim() || "заказчик",
+    reportDate: els.reportDate.value,
+    engineerName: els.engineerName.value.trim() || "Мацко А.В.",
   };
 }
 
@@ -425,6 +441,7 @@ function calculateBatch() {
 function calculate() {
   renderHeader();
   renderDilutionPlan();
+  updateGeneratedWorkPlan();
   if (state.tanks.length === 0) {
     els.resultSubtitle.textContent = "Добавьте емкости или загрузите пример.";
     showWarnings([]);
@@ -462,6 +479,139 @@ function getReportVolumes(params) {
     totalVolume,
     effectiveVolume: state.mode === "batch" ? selectedVolume : totalVolume,
   };
+}
+
+function densityKg(valueGcm3) {
+  return valueGcm3 * 1000;
+}
+
+function fmtKgDensity(valueGcm3, digits = 0) {
+  return fmt(densityKg(valueGcm3), digits);
+}
+
+function targetGaugeDensityAtTemp(params, temperature) {
+  return params.targetDensity - params.tempCoeff * (temperature - params.referenceTemp);
+}
+
+function calculateDrainForFreeVolume(volume, density, target, waterDensity, requiredWater, capacity) {
+  const currentFree = capacity - volume;
+  if (currentFree >= requiredWater) return 0;
+  const denominator = target - waterDensity;
+  if (denominator <= 0 || density <= target) return Math.max(requiredWater - currentFree, 0);
+
+  const targetWaterAfterDrain = (volume * (density - target)) / denominator;
+  const slope = (density - waterDensity) / denominator;
+  const requiredDrain = (targetWaterAfterDrain - (capacity - volume)) / slope;
+  return Math.max(requiredDrain, 0);
+}
+
+function getPerTankReportCalculations(params) {
+  return state.tanks.map((tank, index) => {
+    const correctedDensity = densityAtReference(tank, params);
+    const free = freeVolumeState(tank);
+    const common = {
+      index: index + 1,
+      name: tank.name,
+      volume: tank.volume,
+      temperature: tank.temperature,
+      sourceDensity: tank.density,
+      correctedDensity,
+      capacity: tank.capacity,
+      free: free.value,
+    };
+
+    if (params.useWeighting && correctedDensity < params.targetDensity) {
+      const result = calcAdjustment(tank.volume, correctedDensity, params.targetDensity, params);
+      return {
+        ...common,
+        mode: "weighting",
+        reagentVolume: result.reagentVolume,
+        reagentKg: result.reagentKg,
+        bags: result.reagentKg / Math.max(params.bagSize, 1),
+        finalVolume: result.finalVolume,
+        finalDensity: result.finalDensity,
+        freeAfter: Math.max(tank.capacity - result.finalVolume, 0),
+      };
+    }
+
+    const calculatedWater = correctedDensity > params.targetDensity
+      ? tank.volume * (correctedDensity - params.targetDensity) / (params.targetDensity - params.waterDensity)
+      : 0;
+    const controlReserve = Math.min(params.controlReserve, calculatedWater);
+    const waterToAdd = Math.max(calculatedWater - controlReserve, 0);
+    const drainVolume = calculateDrainForFreeVolume(
+      tank.volume,
+      correctedDensity,
+      params.targetDensity,
+      params.waterDensity,
+      waterToAdd,
+      tank.capacity,
+    );
+    const workingVolume = Math.max(tank.volume - drainVolume, 0);
+    const workingMass = workingVolume * correctedDensity;
+    const densityBeforeFinal = waterToAdd > 0
+      ? (workingMass + waterToAdd * params.waterDensity) / (workingVolume + waterToAdd)
+      : correctedDensity;
+    const finalVolume = workingVolume + waterToAdd;
+
+    return {
+      ...common,
+      mode: "dilution",
+      calculatedWater,
+      controlReserve,
+      waterToAdd,
+      drainVolume,
+      finalVolume,
+      freeAfter: Math.max(tank.capacity - finalVolume, 0),
+      densityBeforeFinal,
+    };
+  });
+}
+
+function reportOperationType(params, rows) {
+  if (params.useWeighting || rows.some((row) => row.mode === "weighting")) return "weighting";
+  return "dilution";
+}
+
+function generateWorkPlanText(params, rows) {
+  const operation = reportOperationType(params, rows);
+
+  if (operation === "weighting") {
+    const lines = [
+      "1. Проверить фактический объем, температуру и плотность раствора в каждой емкости перед вводом сухого реагента.",
+      "2. Вводить сухой реагент порционно при включенном перемешивании/рециркуляции, не допуская локального пересыщения и осадкообразования.",
+      "3. После ввода основной расчетной массы реагента выполнить перемешивание до стабилизации плотности.",
+      "4. Замерить плотность и температуру раствора в каждой емкости, привести показания к расчетной температуре и передать данные инженеру-технологу ООО «Вэл Инжиниринг».",
+      "5. Финальную корректировку выполнять малыми порциями реагента только после подтверждения промежуточного замера.",
+      "6. Зафиксировать финальные V, T, ρ@T и ρ@20 по каждой емкости в исполнительной документации.",
+    ];
+    return lines.join("\n");
+  }
+
+  const drainRows = rows.filter((row) => row.drainVolume > 0.0001);
+  const waterList = rows
+    .filter((row) => row.waterToAdd > 0.0001)
+    .map((row) => `${row.name} — ${fmt(row.waterToAdd, 2)} м3`)
+    .join("; ");
+  const drainText = drainRows.length
+    ? `1. Предварительно освободить объем в емкостях: ${drainRows.map((row) => `${row.name} — слить ${fmt(row.drainVolume, 2)} м3`).join("; ")}. Слитый раствор сохранить в рабочем объеме поставки и потерями не считать.`
+    : "1. Проверить фактический свободный объем в каждой емкости перед началом разбавления.";
+
+  return [
+    drainText,
+    `2. Долить пресную воду (ρ≈${fmt(densityKg(params.waterDensity), 0)} кг/м3): ${waterList || "долив не требуется"}. Доливать порционно при включенном перемешивании/рециркуляции.`,
+    "3. После основного долива замерить плотность и температуру раствора в каждой емкости и довести данные до инженера-технолога ООО «Вэл Инжиниринг».",
+    `4. Привести замер к ${fmt(params.referenceTemp, 0)} °C по принятой поправке ρ@20 = ρизм + ${fmt(densityKg(params.tempCoeff), 2)}·(T − ${fmt(params.referenceTemp, 0)}). Приемка по целевой плотности ${fmtKgDensity(params.targetDensity, 0)} кг/м3.`,
+    `5. Если плотность выше ${fmtKgDensity(params.targetDensity, 0)} кг/м3, долить остаток воды из резерва малыми порциями по 50-100 л с замером после каждой порции.`,
+    "6. Зафиксировать финальные V, T, ρ@T и ρ@20 по каждой емкости в исполнительной документации.",
+  ].join("\n");
+}
+
+function updateGeneratedWorkPlan(force = false) {
+  if (state.workPlanTouched && !force) return;
+  const params = readParams();
+  const rows = getPerTankReportCalculations(params);
+  els.engineerRecommendations.value = generateWorkPlanText(params, rows);
 }
 
 function getDilutionBase(params) {
@@ -799,34 +949,455 @@ async function exportReportPdf() {
   }
 }
 
+function xmlEscape(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function docTextRuns(text, bold = false) {
+  return String(text)
+    .split("\n")
+    .map((line, index) => {
+      const br = index === 0 ? "" : "<w:br/>";
+      return `${br}<w:r>${bold ? "<w:rPr><w:b/></w:rPr>" : ""}<w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r>`;
+    })
+    .join("");
+}
+
+function docParagraph(text, options = {}) {
+  const style = options.style ? `<w:pStyle w:val="${options.style}"/>` : "";
+  const jc = options.align ? `<w:jc w:val="${options.align}"/>` : "";
+  const spacing = `<w:spacing w:before="${options.before ?? 0}" w:after="${options.after ?? 120}" w:line="276" w:lineRule="auto"/>`;
+  const indent = options.indent ? `<w:ind w:firstLine="${options.indent}"/>` : "";
+  return `<w:p><w:pPr>${style}${jc}${spacing}${indent}</w:pPr>${docTextRuns(text, options.bold)}</w:p>`;
+}
+
+function docLogoParagraph() {
+  return `
+    <w:p>
+      <w:pPr><w:spacing w:after="260"/><w:jc w:val="left"/></w:pPr>
+      <w:r>
+        <w:drawing>
+          <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+            <wp:extent cx="3100000" cy="760000"/>
+            <wp:docPr id="1" name="Well Engineering"/>
+            <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                  <pic:nvPicPr><pic:cNvPr id="0" name="well-engineering-logo.png"/><pic:cNvPicPr/></pic:nvPicPr>
+                  <pic:blipFill><a:blip r:embed="rIdLogo"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+                  <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="3100000" cy="760000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+  `;
+}
+
+function docCell(content, options = {}) {
+  const width = options.width ? `<w:tcW w:w="${options.width}" w:type="dxa"/>` : "";
+  const fill = options.fill ? `<w:shd w:fill="${options.fill}"/>` : "";
+  const vAlign = "<w:vAlign w:val=\"center\"/>";
+  const paragraphs = Array.isArray(content)
+    ? content.join("")
+    : `<w:p><w:pPr><w:spacing w:after="0"/><w:jc w:val="${options.align || "center"}"/></w:pPr><w:r><w:rPr>${options.bold ? "<w:b/>" : ""}<w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${xmlEscape(content)}</w:t></w:r></w:p>`;
+  return `<w:tc><w:tcPr>${width}${fill}${vAlign}</w:tcPr>${paragraphs}</w:tc>`;
+}
+
+function docTable(rows, options = {}) {
+  const widths = options.widths || [];
+  const headerFill = options.headerFill || "BDD7EE";
+  const tableRows = rows
+    .map((row, rowIndex) => {
+      const isHeader = rowIndex === 0 && options.header !== false;
+      const cells = row
+        .map((cell, cellIndex) => {
+          const value = typeof cell === "object" && cell !== null ? cell.value : cell;
+          const cellOptions = typeof cell === "object" && cell !== null ? cell : {};
+          return docCell(String(value ?? ""), {
+            width: widths[cellIndex],
+            fill: isHeader ? headerFill : cellOptions.fill,
+            bold: isHeader || cellOptions.bold,
+            align: cellOptions.align || (cellIndex === 0 ? "left" : "center"),
+          });
+        })
+        .join("");
+      return `<w:tr>${cells}</w:tr>`;
+    })
+    .join("");
+  const grid = widths.map((width) => `<w:gridCol w:w="${width}"/>`).join("");
+  return `
+    <w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="0" w:type="auto"/>
+        <w:tblBorders>
+          <w:top w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:left w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:bottom w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:right w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:insideH w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:insideV w:val="single" w:sz="4" w:color="BFBFBF"/>
+        </w:tblBorders>
+        <w:tblCellMar>
+          <w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/>
+          <w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/>
+        </w:tblCellMar>
+      </w:tblPr>
+      <w:tblGrid>${grid}</w:tblGrid>
+      ${tableRows}
+    </w:tbl>
+  `;
+}
+
+function makeTemperatureTargetRows(params) {
+  return [
+    ["Температура раствора в емкости, °C", "Целевое показание плотномера, кг/м3"],
+    ...[15, 20, 25, 30, 35].map((temperature) => [
+      `+${temperature}`,
+      temperature === params.referenceTemp
+        ? `${fmtKgDensity(params.targetDensity, 0)} (норма)`
+        : fmtKgDensity(targetGaugeDensityAtTemp(params, temperature), 0),
+    ]),
+  ];
+}
+
+function makeReportTables(params, rows, operation) {
+  const sourceRows = [
+    ["№", "Емкость", "V раствора, м3", "T, °C", "ρ@T, кг/м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`],
+    ...rows.map((row) => [
+      row.index,
+      row.name,
+      fmt(row.volume, 1),
+      fmt(row.temperature, 1),
+      fmtKgDensity(row.sourceDensity, 0),
+      fmtKgDensity(row.correctedDensity, 0),
+    ]),
+  ];
+
+  const resultRows = operation === "weighting"
+    ? [
+        ["Емкость", "V раствора, м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, "Реагент, кг", "Мешки", "Объем после, м3", "Свободный объем, м3"],
+        ...rows.map((row) => [
+          row.name,
+          fmt(row.volume, 1),
+          fmtKgDensity(row.correctedDensity, 0),
+          row.mode === "weighting" ? fmt(row.reagentKg, 0) : "0",
+          row.mode === "weighting" ? fmt(row.bags, 2) : "0",
+          fmt(row.finalVolume ?? row.volume, 2),
+          fmt(row.freeAfter ?? row.free, 2),
+        ]),
+      ]
+    : [
+        ["Емкость", "V раствора, м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, "Расчетная вода, м3", "Резерв, м3", "Вода к доливу, м3", "Слив, м3", "Объем после, м3", "Свободно, м3", `Ожидаемая ρ@${fmt(params.referenceTemp, 0)}, кг/м3`],
+        ...rows.map((row) => [
+          row.name,
+          fmt(row.volume, 1),
+          fmtKgDensity(row.correctedDensity, 0),
+          fmt(row.calculatedWater, 2),
+          fmt(row.controlReserve, 2),
+          { value: fmt(row.waterToAdd, 2), fill: "E2F0D9", bold: true },
+          row.drainVolume > 0 ? { value: fmt(row.drainVolume, 2), fill: "FFF2CC", bold: true } : "0,00",
+          fmt(row.finalVolume, 2),
+          fmt(row.freeAfter, 2),
+          `~${fmtKgDensity(row.densityBeforeFinal, 0)}`,
+        ]),
+      ];
+
+  return { sourceRows, resultRows };
+}
+
+function buildDocxDocumentXml(params, rows) {
+  const operation = reportOperationType(params, rows);
+  const date = params.reportDate
+    ? new Date(`${params.reportDate}T00:00:00`).toLocaleDateString("ru-RU")
+    : new Date().toLocaleDateString("ru-RU");
+  const targetKg = fmtKgDensity(params.targetDensity, 0);
+  const { sourceRows, resultRows } = makeReportTables(params, rows, operation);
+  const workPlan = els.engineerRecommendations.value.trim() || generateWorkPlanText(params, rows);
+  const densityIntro = rows.length
+    ? `с ${fmtKgDensity(rows[0].correctedDensity, 0)} до ${targetKg} кг/м3`
+    : `до ${targetKg} кг/м3`;
+  const methodText = operation === "weighting"
+    ? `Модель — волюметрически-аддитивная: при вводе сухого реагента растут масса и расчетный объем раствора. Эффективная плотность реагента принята ${fmt(params.reagentDensity, 2)} г/см3.`
+    : `Модель — волюметрически-аддитивная: при доливе воды количество соли в растворе не меняется — растет только объем, а плотность падает. Объем воды для снижения плотности считается по формуле: V_воды = V · (ρ@${fmt(params.referenceTemp, 0)} − ${targetKg}) / (${targetKg} − ${fmtKgDensity(params.waterDensity, 0)}).`;
+
+  const body = [
+    docLogoParagraph(),
+    docParagraph(`РЕКОМЕНДАЦИИ ПО ПРИГОТОВЛЕНИЮ РАБОЧЕГО РАСТВОРА\nПЛОТНОСТЬЮ ${targetKg} кг/м3`, { style: "Title", align: "center", bold: true, after: 120 }),
+    docParagraph(`из поставленного концентрата ${params.reportProduct} (${params.reportWell})`, { style: "Subtitle", align: "center", bold: true, after: 40 }),
+    docParagraph(`в адрес ${params.reportCustomer} · инженерное сопровождение поставки · ${date} г.`, { style: "Italic", align: "center", after: 260 }),
+    docParagraph("1. Цель", { style: "Heading1" }),
+    docParagraph(`${operation === "weighting" ? "Определить массу сухого реагента для повышения плотности" : "Определить объем пресной воды для снижения плотности"} рабочего раствора ${params.reportProduct} ${densityIntro} (при ${fmt(params.referenceTemp, 0)} °C) по каждой емкости с учетом свободного объема.`, { indent: 720 }),
+    docParagraph("2. Исходные данные", { style: "Heading1" }),
+    docParagraph(`Исходные данные введены пользователем в калькуляторе. Замеры плотности приведены к ${fmt(params.referenceTemp, 0)} °C по принятой поправке ρ@20 = ρизм + ${fmt(densityKg(params.tempCoeff), 2)}·(T − ${fmt(params.referenceTemp, 0)}). Коэффициент является расчетным и должен уточняться для конкретного солевого состава при наличии лабораторной температурной кривой.`, { indent: 720 }),
+    docTable(sourceRows, { widths: [520, 2050, 1660, 1060, 1440, 1660] }),
+    docParagraph("3. Методика расчета", { style: "Heading1", before: 180 }),
+    docParagraph(methodText, { indent: 720 }),
+    docParagraph("4. Результат по емкостям", { style: "Heading1", before: 180 }),
+    docTable(resultRows, { widths: operation === "weighting" ? [2050, 1350, 1500, 1250, 950, 1250, 1200] : [1200, 850, 1000, 900, 780, 900, 730, 900, 850, 950] }),
+    operation === "dilution"
+      ? docParagraph(`Долив выполняется на ${fmt(params.controlReserve, 2)} м3 меньше расчетного по каждой емкости, где это возможно. Это резерв на финальный контроль и защита от переразбавления. Слитый раствор при необходимости освобождения объема сохраняется в рабочем объеме поставки и потерями не является.`, { before: 120 })
+      : docParagraph("Ввод реагента выполнять порционно с обязательным перемешиванием и промежуточным контролем плотности.", { before: 120 }),
+    docParagraph("5. Порядок работ и точки контроля", { style: "Heading1", before: 180 }),
+    ...workPlan.split("\n").filter(Boolean).map((line) => docParagraph(line, { before: 40, after: 80 })),
+    docParagraph("Целевое показание плотномера при фактической температуре раствора:", { before: 140 }),
+    docTable(makeTemperatureTargetRows(params), { widths: [4200, 4200] }),
+    docParagraph("6. Зона ответственности и примечания", { style: "Heading1", before: 180 }),
+    docParagraph(`Слитый раствор сохраняется в рабочем объеме поставки ${params.reportProduct} и потерями не является.`),
+    docParagraph(`${operation === "weighting" ? "Утяжеление" : "Разбавление"} до ${targetKg} кг/м3 выполняется силами ${params.reportCustomer} на объекте.`),
+    docParagraph(`Любую дальнейшую корректировку плотности выполнять только после согласования с инженером-технологом ООО «Вэл Инжиниринг».`),
+    docParagraph(`Инженерное сопровождение носит рекомендательный характер; конечная ответственность за результат операции — на ${params.reportCustomer} в рамках договора.`),
+    docParagraph("", { before: 420 }),
+    docTable([
+      [
+        { value: "Инженер-технолог\nООО «Вэл Инжиниринг»", bold: true, align: "left" },
+        { value: params.engineerName, bold: true, align: "right" },
+      ],
+    ], { header: false, widths: [4200, 4200] }),
+  ].join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+      <w:body>
+        ${body}
+        <w:sectPr>
+          <w:pgSz w:w="11906" w:h="16838"/>
+          <w:pgMar w:top="850" w:right="1134" w:bottom="850" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>
+        </w:sectPr>
+      </w:body>
+    </w:document>`;
+}
+
+function buildDocxStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+        <w:qFormat/>
+        <w:pPr><w:spacing w:after="120" w:line="276" w:lineRule="auto"/><w:jc w:val="both"/></w:pPr>
+        <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Title">
+        <w:name w:val="Title"/>
+        <w:basedOn w:val="Normal"/>
+        <w:qFormat/>
+        <w:pPr><w:spacing w:before="120" w:after="80"/><w:jc w:val="center"/></w:pPr>
+        <w:rPr><w:b/><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="32"/></w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Subtitle">
+        <w:name w:val="Subtitle"/>
+        <w:basedOn w:val="Normal"/>
+        <w:qFormat/>
+        <w:pPr><w:spacing w:after="40"/><w:jc w:val="center"/></w:pPr>
+        <w:rPr><w:b/><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="28"/></w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Italic">
+        <w:name w:val="Italic"/>
+        <w:basedOn w:val="Normal"/>
+        <w:pPr><w:spacing w:after="120"/><w:jc w:val="center"/></w:pPr>
+        <w:rPr><w:i/><w:sz w:val="24"/></w:rPr>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:basedOn w:val="Normal"/>
+        <w:qFormat/>
+        <w:pPr><w:keepNext/><w:spacing w:before="220" w:after="120"/></w:pPr>
+        <w:rPr><w:b/><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="30"/></w:rPr>
+      </w:style>
+    </w:styles>`;
+}
+
+function buildDocxPackageXml() {
+  return {
+    contentTypes: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Default Extension="png" ContentType="image/png"/>
+        <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+        <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+        <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+      </Types>`,
+    packageRels: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+      </Relationships>`,
+    documentRels: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+        <Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/well-engineering-logo.png"/>
+      </Relationships>`,
+    settings: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:zoom w:percent="100"/>
+      </w:settings>`,
+  };
+}
+
+function makeCrcTable() {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+}
+
+const crcTable = makeCrcTable();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function utf8Bytes(value) {
+  return new TextEncoder().encode(value);
+}
+
+function u16(value) {
+  return [value & 0xff, (value >>> 8) & 0xff];
+}
+
+function u32(value) {
+  return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
+}
+
+function dosDateTime(date = new Date()) {
+  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = Math.max(date.getFullYear() - 1980, 0);
+  return { time, date: (year << 9) | (month << 5) | day };
+}
+
+function buildZip(files) {
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const stamp = dosDateTime();
+
+  for (const file of files) {
+    const nameBytes = utf8Bytes(file.name);
+    const data = file.data instanceof Uint8Array ? file.data : utf8Bytes(file.data);
+    const crc = crc32(data);
+    const local = new Uint8Array([
+      ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(stamp.time), ...u16(stamp.date),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameBytes.length), ...u16(0),
+      ...nameBytes,
+    ]);
+    chunks.push(local, data);
+    central.push(new Uint8Array([
+      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(stamp.time), ...u16(stamp.date),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nameBytes.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(offset), ...nameBytes,
+    ]));
+    offset += local.length + data.length;
+  }
+
+  const centralOffset = offset;
+  for (const item of central) {
+    chunks.push(item);
+    offset += item.length;
+  }
+  chunks.push(new Uint8Array([
+    ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length),
+    ...u32(offset - centralOffset), ...u32(centralOffset), ...u16(0),
+  ]));
+
+  return new Blob(chunks, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+async function buildDocxBlob(params, rows) {
+  const packageXml = buildDocxPackageXml();
+  const logoBytes = new Uint8Array(await (await fetch("assets/well-engineering-logo.png")).arrayBuffer());
+  return buildZip([
+    { name: "[Content_Types].xml", data: packageXml.contentTypes },
+    { name: "_rels/.rels", data: packageXml.packageRels },
+    { name: "word/document.xml", data: buildDocxDocumentXml(params, rows) },
+    { name: "word/styles.xml", data: buildDocxStylesXml() },
+    { name: "word/settings.xml", data: packageXml.settings },
+    { name: "word/_rels/document.xml.rels", data: packageXml.documentRels },
+    { name: "word/media/well-engineering-logo.png", data: logoBytes },
+  ]);
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportDocxReport() {
+  calculate();
+  updateGeneratedWorkPlan();
+  const params = readParams();
+  const rows = getPerTankReportCalculations(params);
+  const date = params.reportDate || new Date().toISOString().slice(0, 10);
+  const cleanProduct = params.reportProduct.replace(/[^a-zA-Zа-яА-Я0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const cleanTarget = String(Math.round(densityKg(params.targetDensity)));
+  const blob = await buildDocxBlob(params, rows);
+  downloadBlob(blob, `Рекомендации_${cleanProduct}_${cleanTarget}_${date}.docx`);
+}
+
 els.addTankBtn.addEventListener("click", () => addTank({ capacity: 50 }));
 els.loadExampleBtn.addEventListener("click", loadExample);
 els.calculateBtn.addEventListener("click", calculate);
 els.printBtn.addEventListener("click", () => window.print());
-els.exportReportBtn.addEventListener("click", exportReportPdf);
+els.exportReportBtn.addEventListener("click", exportDocxReport);
 els.modeTanksBtn.addEventListener("click", () => setMode("tanks"));
 els.modeBatchBtn.addEventListener("click", () => setMode("batch"));
 els.autoAllocateBtn.addEventListener("click", autoAllocate);
+els.useWeighting.addEventListener("change", () => {
+  els.weightingFields.classList.toggle("hidden", !els.useWeighting.checked);
+  updateGeneratedWorkPlan();
+  calculate();
+});
+els.engineerRecommendations.addEventListener("input", () => {
+  state.workPlanTouched = true;
+});
 
 document.addEventListener("input", (event) => {
   const target = event.target;
   if (target.matches("[data-id][data-key]")) {
     updateTank(target.dataset.id, target.dataset.key, target.value);
     renderDilutionPlan();
+    updateGeneratedWorkPlan();
   }
 
   if (target.matches("[data-allocation]")) {
     state.allocations[target.dataset.allocation] = num(target.value, 0);
     renderDilutionPlan();
+    updateGeneratedWorkPlan();
   }
 
   if (target.closest(".settings-panel") || target.closest(".scenario-controls")) {
     renderHeader();
     renderDilutionPlan();
+    updateGeneratedWorkPlan();
   }
 
   if (target.closest(".dilution-plan-panel")) {
     renderDilutionPlan();
+    updateGeneratedWorkPlan();
+  }
+
+  if (target.closest(".report-meta-panel")) {
+    updateGeneratedWorkPlan();
   }
 });
 
@@ -835,4 +1406,5 @@ document.addEventListener("click", (event) => {
   if (removeId) removeTank(removeId);
 });
 
+els.reportDate.value = new Date().toISOString().slice(0, 10);
 loadExample();
