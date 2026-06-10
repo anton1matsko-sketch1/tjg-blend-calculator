@@ -1,0 +1,19 @@
+{
+  "name": "Калькулятор корректировки плотности ТЖГ",
+  "short_name": "ТЖГ",
+  "description": "Офлайн-калькулятор разбавления и утяжеления технологических жидкостей.",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f8f9",
+  "theme_color": "#00151e",
+  "icons": [
+    {
+      "src": "assets/well-engineering-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
