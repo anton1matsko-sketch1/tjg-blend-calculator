@@ -61,17 +61,53 @@ textarea {
 
 .brand-block {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
   align-items: center;
   gap: clamp(18px, 3vw, 34px);
   min-width: 0;
 }
 
 .brand-logo {
-  display: block;
-  width: min(260px, 42vw);
-  height: auto;
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  color: var(--brand);
   filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.2));
+}
+
+.brand-mark {
+  display: block;
+  width: 68px;
+  height: 74px;
+}
+
+.brand-wordmark {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.brand-wordmark div {
+  color: #fff;
+  font-size: clamp(24px, 2.2vw, 34px);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brand-wordmark span {
+  color: var(--brand);
+  font-weight: 900;
+  margin-right: 2px;
+}
+
+.brand-wordmark small {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .brand-copy {
@@ -130,10 +166,10 @@ p {
 
 .header-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(94px, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   align-content: end;
   gap: 10px;
-  min-width: min(440px, 100%);
+  min-width: min(600px, 100%);
 }
 
 .summary-tile {
@@ -156,13 +192,21 @@ p {
   display: block;
   margin-top: 5px;
   color: #fff;
-  font-size: 20px;
+  font-size: clamp(18px, 1.55vw, 23px);
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .app-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-areas:
+    "tanks params"
+    "meta params"
+    "scenario params"
+    "plan plan"
+    "results results"
+    "recommendations recommendations";
   align-items: start;
   gap: 18px;
   padding: 18px clamp(14px, 3vw, 36px) 46px;
@@ -197,13 +241,13 @@ p {
   padding: clamp(16px, 2vw, 22px);
 }
 
-.scenario-panel,
-.results-panel,
-.recommendations-panel,
-.dilution-plan-panel,
-.report-meta-panel {
-  grid-column: 1 / -1;
-}
+.workspace { grid-area: tanks; }
+.settings-panel { grid-area: params; }
+.report-meta-panel { grid-area: meta; }
+.scenario-panel { grid-area: scenario; }
+.dilution-plan-panel { grid-area: plan; }
+.results-panel { grid-area: results; }
+.recommendations-panel { grid-area: recommendations; }
 
 .section-head {
   display: flex;
@@ -515,18 +559,67 @@ button:hover {
   min-width: 860px;
 }
 
-.dilution-table td:last-child {
-  font-weight: 800;
-}
-
 .dilution-row-near {
-  background: #fff8df;
+  background: #fff9ea;
 }
 
 .dilution-row-target {
-  background: #ecf8f0;
-  color: var(--success);
+  background: #edf8f2;
   font-weight: 900;
+}
+
+.dilution-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 9px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dilution-status::before {
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  content: "";
+  background: var(--blue);
+}
+
+.dilution-status-near {
+  border-color: rgba(185, 106, 0, 0.28);
+  background: #fff8e4;
+  color: #704300;
+}
+
+.dilution-status-near::before {
+  background: var(--caution);
+}
+
+.dilution-status-target {
+  border-color: rgba(21, 123, 77, 0.26);
+  background: #eaf7f0;
+  color: var(--success);
+}
+
+.dilution-status-target::before {
+  background: var(--success);
+}
+
+.dilution-status-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .empty-row {
@@ -872,11 +965,30 @@ button:hover {
   }
 
   .brand-logo {
-    width: min(260px, 72vw);
+    grid-template-columns: 58px minmax(0, 1fr);
+    width: auto;
+  }
+
+  .brand-mark {
+    width: 58px;
+    height: 64px;
+  }
+
+  .header-summary {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    min-width: 0;
   }
 
   .app-shell {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "tanks"
+      "params"
+      "meta"
+      "scenario"
+      "plan"
+      "results"
+      "recommendations";
   }
 
   .scenario-controls {
@@ -925,6 +1037,24 @@ button:hover {
 
   .header-summary {
     grid-template-columns: 1fr;
+  }
+
+  .brand-logo {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 48px;
+    height: 54px;
+  }
+
+  .brand-wordmark div {
+    font-size: 22px;
+  }
+
+  .brand-wordmark small {
+    font-size: 12px;
   }
 
   .workspace,

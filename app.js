@@ -671,10 +671,15 @@ function buildDilutionPlanRows(params) {
       cumulativeWater,
       density: Math.max(densityAfterStep, target),
       status: reachedTarget
-        ? "🔴 Стоп — целевая плотность достигнута"
+        ? "Цель достигнута"
         : nextStepIsLast
-          ? "🟡 Следующий шаг — последний, контролировать дробно"
-          : "🟢 Норма",
+          ? "Контрольный шаг"
+          : "Норма",
+      statusNote: reachedTarget
+        ? "Дальнейшее разбавление остановить"
+        : nextStepIsLast
+          ? "Следующий шаг выполнять дробно"
+          : "Параметры в рабочем диапазоне",
       tone: reachedTarget ? "target" : nextStepIsLast ? "near" : "normal",
     });
 
@@ -724,7 +729,10 @@ function renderDilutionPlan() {
           <td>${fmt(row.stepWater, 2)}</td>
           <td>${fmt(row.cumulativeWater, 2)}</td>
           <td>${fmt(row.density, 3)}</td>
-          <td>${row.status}</td>
+          <td>
+            <span class="dilution-status dilution-status-${row.tone}">${row.status}</span>
+            <span class="dilution-status-note">${row.statusNote}</span>
+          </td>
         </tr>
       `,
     )
