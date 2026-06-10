@@ -455,6 +455,10 @@ button:hover {
   background: #fff;
 }
 
+.table-action-cell {
+  width: 48px;
+}
+
 .free-volume {
   color: var(--blue);
   font-weight: 800;
@@ -1021,9 +1025,12 @@ button:hover {
 @media (max-width: 560px) {
   body {
     font-size: 14px;
+    overflow-x: hidden;
   }
 
   .app-header {
+    margin-right: 10px;
+    margin-left: 10px;
     padding: 14px;
   }
 
@@ -1067,6 +1074,11 @@ button:hover {
     padding: 14px;
   }
 
+  .app-shell {
+    gap: 12px;
+    padding: 12px 10px 32px;
+  }
+
   .section-head {
     gap: 12px;
   }
@@ -1085,6 +1097,126 @@ button:hover {
 
   .summary-tile {
     min-height: 62px;
+  }
+}
+
+@media (max-width: 720px) {
+  input,
+  textarea,
+  button {
+    font-size: 16px;
+  }
+
+  .table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .data-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .data-table tr {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(2, 26, 37, 0.05);
+  }
+
+  .data-table td {
+    display: grid;
+    grid-template-columns: minmax(106px, 0.42fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border-bottom: 0;
+    padding: 0;
+  }
+
+  .data-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .data-table td:not([data-label])::before {
+    content: none;
+  }
+
+  .data-table input {
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .free-volume {
+    justify-items: start;
+    font-size: 18px;
+  }
+
+  .table-action-cell {
+    width: auto;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    margin-top: 2px;
+  }
+
+  .remove-button {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .dilution-table {
+    min-width: 0;
+  }
+
+  .dilution-table td {
+    grid-template-columns: minmax(126px, 0.46fr) minmax(0, 1fr);
+  }
+
+  .dilution-status {
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .dilution-status-note {
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-wordmark div {
+    font-size: 20px;
+  }
+
+  .brand-wordmark small {
+    font-size: 11px;
+  }
+
+  .data-table td,
+  .dilution-table td {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .data-table td::before {
+    font-size: 11px;
+    text-transform: uppercase;
   }
 }
 

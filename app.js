@@ -257,13 +257,13 @@ function renderTanks() {
       const free = freeVolumeState(tank);
       return `
         <tr>
-          <td><input value="${tank.name}" data-id="${tank.id}" data-key="name" aria-label="Название емкости" /></td>
-          <td><input type="number" min="0" step="0.1" value="${tank.volume}" data-id="${tank.id}" data-key="volume" aria-label="Объем" /></td>
-          <td><input type="number" min="0" step="0.001" value="${tank.density}" data-id="${tank.id}" data-key="density" aria-label="Плотность" /></td>
-          <td><input type="number" step="1" value="${tank.temperature}" data-id="${tank.id}" data-key="temperature" aria-label="Температура" /></td>
-          <td><input type="number" min="0" step="0.1" value="${tank.capacity}" data-id="${tank.id}" data-key="capacity" aria-label="Максимальный объем" /></td>
-          <td class="free-volume ${free.overflow ? "is-overflow" : ""}" data-free="${tank.id}">${fmt(free.value, 2)} м3</td>
-          <td><button class="remove-button" type="button" data-remove="${tank.id}" title="Удалить емкость">×</button></td>
+          <td data-label="Емкость"><input value="${tank.name}" data-id="${tank.id}" data-key="name" aria-label="Название емкости" /></td>
+          <td data-label="Объем, м3"><input type="number" min="0" step="0.1" value="${tank.volume}" data-id="${tank.id}" data-key="volume" aria-label="Объем" /></td>
+          <td data-label="Плотность, г/см3"><input type="number" min="0" step="0.001" value="${tank.density}" data-id="${tank.id}" data-key="density" aria-label="Плотность" /></td>
+          <td data-label="Темп., C"><input type="number" step="1" value="${tank.temperature}" data-id="${tank.id}" data-key="temperature" aria-label="Температура" /></td>
+          <td data-label="Макс., м3"><input type="number" min="0" step="0.1" value="${tank.capacity}" data-id="${tank.id}" data-key="capacity" aria-label="Максимальный объем" /></td>
+          <td data-label="Свободно" class="free-volume ${free.overflow ? "is-overflow" : ""}" data-free="${tank.id}">${fmt(free.value, 2)} м3</td>
+          <td class="table-action-cell"><button class="remove-button" type="button" data-remove="${tank.id}" title="Удалить емкость">×</button></td>
         </tr>
       `;
     })
@@ -725,11 +725,11 @@ function renderDilutionPlan() {
     .map(
       (row) => `
         <tr class="dilution-row-${row.tone}">
-          <td>${row.stepNumber}</td>
-          <td>${fmt(row.stepWater, 2)}</td>
-          <td>${fmt(row.cumulativeWater, 2)}</td>
-          <td>${fmt(row.density, 3)}</td>
-          <td>
+          <td data-label="Шаг №">${row.stepNumber}</td>
+          <td data-label="Добавить воды, м3">${fmt(row.stepWater, 2)}</td>
+          <td data-label="Итого добавлено, м3">${fmt(row.cumulativeWater, 2)}</td>
+          <td data-label="Ожидаемая плотность">${fmt(row.density, 3)}</td>
+          <td data-label="Статус">
             <span class="dilution-status dilution-status-${row.tone}">${row.status}</span>
             <span class="dilution-status-note">${row.statusNote}</span>
           </td>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "tjg-blend-calculator-v1";
+const CACHE_NAME = "tjg-blend-calculator-v2";
 const OFFLINE_ASSETS = [
   "./",
   "./index.html",
