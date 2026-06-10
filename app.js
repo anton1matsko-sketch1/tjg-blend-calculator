@@ -1400,8 +1400,18 @@ els.exportReportBtn.addEventListener("click", exportDocxReport);
 els.modeTanksBtn.addEventListener("click", () => setMode("tanks"));
 els.modeBatchBtn.addEventListener("click", () => setMode("batch"));
 els.autoAllocateBtn.addEventListener("click", autoAllocate);
+
+function updateWeightingFieldsState() {
+  const enabled = els.useWeighting.checked;
+  els.weightingFields.classList.toggle("is-disabled", !enabled);
+  els.weightingFields.setAttribute("aria-disabled", String(!enabled));
+  els.weightingFields.querySelectorAll("input").forEach((input) => {
+    input.disabled = !enabled;
+  });
+}
+
 els.useWeighting.addEventListener("change", () => {
-  els.weightingFields.classList.toggle("hidden", !els.useWeighting.checked);
+  updateWeightingFieldsState();
   updateGeneratedWorkPlan();
   calculate();
 });
@@ -1446,3 +1456,4 @@ document.addEventListener("click", (event) => {
 
 els.reportDate.value = new Date().toISOString().slice(0, 10);
 loadExample();
+updateWeightingFieldsState();
