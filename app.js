@@ -1000,53 +1000,93 @@ function docLogoParagraph() {
   `;
 }
 
+function docRule() {
+  return `
+    <w:p>
+      <w:pPr>
+        <w:spacing w:before="80" w:after="240"/>
+        <w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="2F75B5"/></w:pBdr>
+      </w:pPr>
+    </w:p>
+  `;
+}
+
 function docCell(content, options = {}) {
   const width = options.width ? `<w:tcW w:w="${options.width}" w:type="dxa"/>` : "";
   const fill = options.fill ? `<w:shd w:fill="${options.fill}"/>` : "";
   const vAlign = "<w:vAlign w:val=\"center\"/>";
+  const color = options.color ? `<w:color w:val="${options.color}"/>` : "";
+  const size = options.size || 22;
+  const cellRuns = String(content)
+    .split("\n")
+    .map((line, index) => {
+      const br = index === 0 ? "" : "<w:br/>";
+      return `${br}<w:r><w:rPr>${options.bold ? "<w:b/>" : ""}${color}<w:sz w:val="${size}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r>`;
+    })
+    .join("");
   const paragraphs = Array.isArray(content)
     ? content.join("")
-    : `<w:p><w:pPr><w:spacing w:after="0"/><w:jc w:val="${options.align || "center"}"/></w:pPr><w:r><w:rPr>${options.bold ? "<w:b/>" : ""}<w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${xmlEscape(content)}</w:t></w:r></w:p>`;
+    : `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="${options.align || "center"}"/></w:pPr>${cellRuns}</w:p>`;
   return `<w:tc><w:tcPr>${width}${fill}${vAlign}</w:tcPr>${paragraphs}</w:tc>`;
 }
 
+function normalizeWidths(widths, total = 9638) {
+  const sum = widths.reduce((acc, width) => acc + width, 0);
+  if (!sum) return widths;
+  const scaled = widths.map((width) => Math.floor((width / sum) * total));
+  scaled[scaled.length - 1] += total - scaled.reduce((acc, width) => acc + width, 0);
+  return scaled;
+}
+
 function docTable(rows, options = {}) {
-  const widths = options.widths || [];
+  const widths = normalizeWidths(options.widths || []);
   const headerFill = options.headerFill || "BDD7EE";
+  const borderXml = options.noBorders
+    ? `
+          <w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>
+          <w:insideH w:val="nil"/><w:insideV w:val="nil"/>`
+    : `
+          <w:top w:val="single" w:sz="6" w:color="A6A6A6"/>
+          <w:left w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:bottom w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:right w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:insideH w:val="single" w:sz="4" w:color="BFBFBF"/>
+          <w:insideV w:val="single" w:sz="4" w:color="BFBFBF"/>`;
   const tableRows = rows
     .map((row, rowIndex) => {
       const isHeader = rowIndex === 0 && options.header !== false;
+      const rowFill = !isHeader && options.zebra && rowIndex % 2 === 0 ? "F2F2F2" : undefined;
       const cells = row
         .map((cell, cellIndex) => {
           const value = typeof cell === "object" && cell !== null ? cell.value : cell;
           const cellOptions = typeof cell === "object" && cell !== null ? cell : {};
           return docCell(String(value ?? ""), {
             width: widths[cellIndex],
-            fill: isHeader ? headerFill : cellOptions.fill,
+            fill: isHeader ? headerFill : cellOptions.fill || rowFill,
             bold: isHeader || cellOptions.bold,
             align: cellOptions.align || (cellIndex === 0 ? "left" : "center"),
+            color: isHeader ? "000000" : cellOptions.color,
+            size: isHeader ? 22 : cellOptions.size || 22,
           });
         })
         .join("");
-      return `<w:tr>${cells}</w:tr>`;
+      return `<w:tr><w:trPr>${isHeader ? "<w:tblHeader/>" : ""}<w:cantSplit/></w:trPr>${cells}</w:tr>`;
     })
     .join("");
   const grid = widths.map((width) => `<w:gridCol w:w="${width}"/>`).join("");
   return `
     <w:tbl>
       <w:tblPr>
-        <w:tblW w:w="0" w:type="auto"/>
+        <w:tblW w:w="9638" w:type="dxa"/>
+        <w:jc w:val="center"/>
+        <w:tblLayout w:type="fixed"/>
+        <w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
         <w:tblBorders>
-          <w:top w:val="single" w:sz="4" w:color="BFBFBF"/>
-          <w:left w:val="single" w:sz="4" w:color="BFBFBF"/>
-          <w:bottom w:val="single" w:sz="4" w:color="BFBFBF"/>
-          <w:right w:val="single" w:sz="4" w:color="BFBFBF"/>
-          <w:insideH w:val="single" w:sz="4" w:color="BFBFBF"/>
-          <w:insideV w:val="single" w:sz="4" w:color="BFBFBF"/>
+          ${borderXml}
         </w:tblBorders>
         <w:tblCellMar>
-          <w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/>
-          <w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/>
+          <w:top w:w="110" w:type="dxa"/><w:left w:w="120" w:type="dxa"/>
+          <w:bottom w:w="110" w:type="dxa"/><w:right w:w="120" w:type="dxa"/>
         </w:tblCellMar>
       </w:tblPr>
       <w:tblGrid>${grid}</w:tblGrid>
@@ -1068,6 +1108,9 @@ function makeTemperatureTargetRows(params) {
 }
 
 function makeReportTables(params, rows, operation) {
+  const tankColumnWidth = Math.floor(6438 / Math.max(rows.length, 1));
+  const resultWidths = [3200, ...rows.map(() => tankColumnWidth)];
+  resultWidths[resultWidths.length - 1] += 9638 - resultWidths.reduce((sum, width) => sum + width, 0);
   const sourceRows = [
     ["№", "Емкость", "V раствора, м3", "T, °C", "ρ@T, кг/м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`],
     ...rows.map((row) => [
@@ -1082,34 +1125,28 @@ function makeReportTables(params, rows, operation) {
 
   const resultRows = operation === "weighting"
     ? [
-        ["Емкость", "V раствора, м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, "Реагент, кг", "Мешки", "Объем после, м3", "Свободный объем, м3"],
-        ...rows.map((row) => [
-          row.name,
-          fmt(row.volume, 1),
-          fmtKgDensity(row.correctedDensity, 0),
-          row.mode === "weighting" ? fmt(row.reagentKg, 0) : "0",
-          row.mode === "weighting" ? fmt(row.bags, 2) : "0",
-          fmt(row.finalVolume ?? row.volume, 2),
-          fmt(row.freeAfter ?? row.free, 2),
-        ]),
+        ["Параметр", ...rows.map((row) => row.name)],
+        ["Объем раствора, м3", ...rows.map((row) => fmt(row.volume, 1))],
+        [`Плотность ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, ...rows.map((row) => fmtKgDensity(row.correctedDensity, 0))],
+        ["Реагент к вводу, кг", ...rows.map((row) => row.mode === "weighting" ? { value: fmt(row.reagentKg, 0), fill: "E2F0D9", bold: true } : "0")],
+        ["Мешки по фасовке, шт.", ...rows.map((row) => row.mode === "weighting" ? fmt(row.bags, 2) : "0")],
+        ["Объем после ввода реагента, м3", ...rows.map((row) => fmt(row.finalVolume ?? row.volume, 2))],
+        ["Свободный объем после корректировки, м3", ...rows.map((row) => fmt(row.freeAfter ?? row.free, 2))],
       ]
     : [
-        ["Емкость", "V раствора, м3", `ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, "Расчетная вода, м3", "Резерв, м3", "Вода к доливу, м3", "Слив, м3", "Объем после, м3", "Свободно, м3", `Ожидаемая ρ@${fmt(params.referenceTemp, 0)}, кг/м3`],
-        ...rows.map((row) => [
-          row.name,
-          fmt(row.volume, 1),
-          fmtKgDensity(row.correctedDensity, 0),
-          fmt(row.calculatedWater, 2),
-          fmt(row.controlReserve, 2),
-          { value: fmt(row.waterToAdd, 2), fill: "E2F0D9", bold: true },
-          row.drainVolume > 0 ? { value: fmt(row.drainVolume, 2), fill: "FFF2CC", bold: true } : "0,00",
-          fmt(row.finalVolume, 2),
-          fmt(row.freeAfter, 2),
-          `~${fmtKgDensity(row.densityBeforeFinal, 0)}`,
-        ]),
+        ["Параметр", ...rows.map((row) => row.name)],
+        ["Объем раствора, м3", ...rows.map((row) => fmt(row.volume, 1))],
+        [`Плотность ρ@${fmt(params.referenceTemp, 0)} °C, кг/м3`, ...rows.map((row) => fmtKgDensity(row.correctedDensity, 0))],
+        ["Расчетная вода до цели, м3", ...rows.map((row) => fmt(row.calculatedWater, 2))],
+        ["Недолив / резерв на контроль, м3", ...rows.map((row) => fmt(row.controlReserve, 2))],
+        ["Вода к доливу, м3", ...rows.map((row) => ({ value: fmt(row.waterToAdd, 2), fill: "E2F0D9", bold: true }))],
+        ["Предварительный слив для освобождения объема, м3", ...rows.map((row) => row.drainVolume > 0 ? { value: fmt(row.drainVolume, 2), fill: "FFF2CC", bold: true } : "0,00")],
+        ["Объем после долива, м3", ...rows.map((row) => fmt(row.finalVolume, 2))],
+        ["Свободный объем после долива, м3", ...rows.map((row) => fmt(row.freeAfter, 2))],
+        [`Ожидаемая ρ@${fmt(params.referenceTemp, 0)} до доводки, кг/м3`, ...rows.map((row) => `~${fmtKgDensity(row.densityBeforeFinal, 0)}`)],
       ];
 
-  return { sourceRows, resultRows };
+  return { sourceRows, resultRows, resultWidths };
 }
 
 function buildDocxDocumentXml(params, rows) {
@@ -1118,7 +1155,7 @@ function buildDocxDocumentXml(params, rows) {
     ? new Date(`${params.reportDate}T00:00:00`).toLocaleDateString("ru-RU")
     : new Date().toLocaleDateString("ru-RU");
   const targetKg = fmtKgDensity(params.targetDensity, 0);
-  const { sourceRows, resultRows } = makeReportTables(params, rows, operation);
+  const { sourceRows, resultRows, resultWidths } = makeReportTables(params, rows, operation);
   const workPlan = els.engineerRecommendations.value.trim() || generateWorkPlanText(params, rows);
   const densityIntro = rows.length
     ? `с ${fmtKgDensity(rows[0].correctedDensity, 0)} до ${targetKg} кг/м3`
@@ -1129,6 +1166,7 @@ function buildDocxDocumentXml(params, rows) {
 
   const body = [
     docLogoParagraph(),
+    docRule(),
     docParagraph(`РЕКОМЕНДАЦИИ ПО ПРИГОТОВЛЕНИЮ РАБОЧЕГО РАСТВОРА\nПЛОТНОСТЬЮ ${targetKg} кг/м3`, { style: "Title", align: "center", bold: true, after: 120 }),
     docParagraph(`из поставленного концентрата ${params.reportProduct} (${params.reportWell})`, { style: "Subtitle", align: "center", bold: true, after: 40 }),
     docParagraph(`в адрес ${params.reportCustomer} · инженерное сопровождение поставки · ${date} г.`, { style: "Italic", align: "center", after: 260 }),
@@ -1136,18 +1174,18 @@ function buildDocxDocumentXml(params, rows) {
     docParagraph(`${operation === "weighting" ? "Определить массу сухого реагента для повышения плотности" : "Определить объем пресной воды для снижения плотности"} рабочего раствора ${params.reportProduct} ${densityIntro} (при ${fmt(params.referenceTemp, 0)} °C) по каждой емкости с учетом свободного объема.`, { indent: 720 }),
     docParagraph("2. Исходные данные", { style: "Heading1" }),
     docParagraph(`Исходные данные введены пользователем в калькуляторе. Замеры плотности приведены к ${fmt(params.referenceTemp, 0)} °C по принятой поправке ρ@20 = ρизм + ${fmt(densityKg(params.tempCoeff), 2)}·(T − ${fmt(params.referenceTemp, 0)}). Коэффициент является расчетным и должен уточняться для конкретного солевого состава при наличии лабораторной температурной кривой.`, { indent: 720 }),
-    docTable(sourceRows, { widths: [520, 2050, 1660, 1060, 1440, 1660] }),
+    docTable(sourceRows, { widths: [520, 2050, 1660, 1060, 1440, 1660], zebra: true }),
     docParagraph("3. Методика расчета", { style: "Heading1", before: 180 }),
     docParagraph(methodText, { indent: 720 }),
     docParagraph("4. Результат по емкостям", { style: "Heading1", before: 180 }),
-    docTable(resultRows, { widths: operation === "weighting" ? [2050, 1350, 1500, 1250, 950, 1250, 1200] : [1200, 850, 1000, 900, 780, 900, 730, 900, 850, 950] }),
+    docTable(resultRows, { widths: resultWidths, zebra: true }),
     operation === "dilution"
       ? docParagraph(`Долив выполняется на ${fmt(params.controlReserve, 2)} м3 меньше расчетного по каждой емкости, где это возможно. Это резерв на финальный контроль и защита от переразбавления. Слитый раствор при необходимости освобождения объема сохраняется в рабочем объеме поставки и потерями не является.`, { before: 120 })
       : docParagraph("Ввод реагента выполнять порционно с обязательным перемешиванием и промежуточным контролем плотности.", { before: 120 }),
     docParagraph("5. Порядок работ и точки контроля", { style: "Heading1", before: 180 }),
     ...workPlan.split("\n").filter(Boolean).map((line) => docParagraph(line, { before: 40, after: 80 })),
     docParagraph("Целевое показание плотномера при фактической температуре раствора:", { before: 140 }),
-    docTable(makeTemperatureTargetRows(params), { widths: [4200, 4200] }),
+    docTable(makeTemperatureTargetRows(params), { widths: [4819, 4819], zebra: true }),
     docParagraph("6. Зона ответственности и примечания", { style: "Heading1", before: 180 }),
     docParagraph(`Слитый раствор сохраняется в рабочем объеме поставки ${params.reportProduct} и потерями не является.`),
     docParagraph(`${operation === "weighting" ? "Утяжеление" : "Разбавление"} до ${targetKg} кг/м3 выполняется силами ${params.reportCustomer} на объекте.`),
@@ -1159,7 +1197,7 @@ function buildDocxDocumentXml(params, rows) {
         { value: "Инженер-технолог\nООО «Вэл Инжиниринг»", bold: true, align: "left" },
         { value: params.engineerName, bold: true, align: "right" },
       ],
-    ], { header: false, widths: [4200, 4200] }),
+    ], { header: false, widths: [4819, 4819], noBorders: true }),
   ].join("");
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
